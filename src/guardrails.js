@@ -18,7 +18,13 @@ const WINDOW_MS = 3_600_000; // 1 hora em ms
 function readRateLimitFile() {
   if (fs.existsSync(RATE_LIMIT_PATH)) {
     try {
-      return JSON.parse(fs.readFileSync(RATE_LIMIT_PATH, "utf-8"));
+      const parsed = JSON.parse(fs.readFileSync(RATE_LIMIT_PATH, "utf-8"));
+      // Garante que ambas as entradas existem e têm a estrutura correta
+      const defaults = getDefaultData();
+      return {
+        email: (parsed.email?.count !== undefined && parsed.email?.window_start) ? parsed.email : defaults.email,
+        event: (parsed.event?.count !== undefined && parsed.event?.window_start) ? parsed.event : defaults.event,
+      };
     } catch {
       // arquivo corrompido → reinicia
     }
@@ -99,7 +105,11 @@ export function validateRecipients(para) {
  * @param {object} params - parâmetros da criação de evento
  */
 export function validateNotRecurring(params) {
-  if (params.recurrence || params.seriesMasterId) {
+  // Bloqueia qualquer valor truthy OU objeto (incluindo {}) nos campos de recorrência.
+  // Nota: string vazia "" é falsy e não representa recorrência real na Graph API.
+  const hasRecurrence = params.recurrence != null && params.recurrence !== "";
+  const hasMasterId = params.seriesMasterId != null && params.seriesMasterId !== "";
+  if (hasRecurrence || hasMasterId) {
     throw new Error(
       "Operação bloqueada: eventos recorrentes não são permitidos neste MCP. " +
         "Crie apenas instâncias únicas (sem campos de recorrência)."
