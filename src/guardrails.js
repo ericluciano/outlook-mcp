@@ -88,14 +88,15 @@ export async function registerAction(domain) {
 }
 
 /**
- * Valida que o campo `para` não ultrapassa 5 destinatários.
- * @param {string} para - string com e-mails separados por vírgula
+ * Valida que o total de destinatários (para + cc + cco) não ultrapassa 5.
+ * @param {{ para: string, cc?: string, cco?: string }} campos
  */
-export function validateRecipients(para) {
-  const emails = para.split(",").map((e) => e.trim()).filter(Boolean);
-  if (emails.length > 5) {
+export function validateRecipients({ para, cc, cco }) {
+  const split = (s) => (s ? s.split(",").map((e) => e.trim()).filter(Boolean) : []);
+  const total = split(para).length + split(cc).length + split(cco).length;
+  if (total > 5) {
     throw new Error(
-      `Envio bloqueado: máximo de 5 destinatários por e-mail. Informados: ${emails.length}.`
+      `Envio bloqueado: máximo de 5 destinatários no total (para + CC + CCO). Informados: ${total}.`
     );
   }
 }

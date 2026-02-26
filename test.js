@@ -58,8 +58,8 @@ try {
 } catch (e) { fail("sendEmailSchema", e.message); }
 
 try {
-  const r = sendEmailSchema.safeParse({ para: "eric@empresa.com", assunto: "Teste", corpo: "Olá", cc: "outro@empresa.com", html: true });
-  r.success ? ok("sendEmailSchema: params completos (cc + html) válidos") : fail("sendEmailSchema: params completos", r.error.message);
+  const r = sendEmailSchema.safeParse({ para: "eric@empresa.com", assunto: "Teste", corpo: "Olá", cc: "outro@empresa.com", cco: "bcc@empresa.com", html: true });
+  r.success ? ok("sendEmailSchema: params completos (cc + cco + html) válidos") : fail("sendEmailSchema: params completos", r.error.message);
 } catch (e) { fail("sendEmailSchema completo", e.message); }
 
 try {
@@ -240,18 +240,32 @@ try {
 
 console.log("\n\n🛡️  GUARDRAILS — validações de segurança\n" + "─".repeat(50));
 
-// ── validateRecipients ──
+// ── validateRecipients — total (para + cc + cco) ──
 try {
-  validateRecipients("a@b.com, c@d.com, e@f.com, g@h.com, i@j.com");
-  ok("validateRecipients: aceita 5 destinatários");
-} catch (e) { fail("validateRecipients: deveria aceitar 5", e.message); }
+  validateRecipients({ para: "a@b.com, c@d.com, e@f.com", cc: "g@h.com", cco: "i@j.com" });
+  ok("validateRecipients: aceita 3 para + 1 cc + 1 cco = 5 total");
+} catch (e) { fail("validateRecipients: deveria aceitar 5 total", e.message); }
 
 try {
-  validateRecipients("a@b.com, c@d.com, e@f.com, g@h.com, i@j.com, k@l.com");
-  fail("validateRecipients: deveria rejeitar 6", "passou quando não devia");
+  validateRecipients({ para: "a@b.com, c@d.com, e@f.com", cc: "g@h.com, i@j.com", cco: "k@l.com" });
+  fail("validateRecipients: deveria rejeitar 3+2+1=6 total", "passou quando não devia");
 } catch (e) {
   e.message.includes("máximo de 5")
-    ? ok("validateRecipients: rejeita 6 destinatários (esperado)", e.message)
+    ? ok("validateRecipients: rejeita 3 para + 2 cc + 1 cco = 6 total (esperado)", e.message)
+    : fail("validateRecipients: mensagem incorreta", e.message);
+}
+
+try {
+  validateRecipients({ para: "a@b.com", cc: undefined, cco: undefined });
+  ok("validateRecipients: aceita 1 para sem cc/cco");
+} catch (e) { fail("validateRecipients: deveria aceitar 1 para sem cc/cco", e.message); }
+
+try {
+  validateRecipients({ para: "a@b.com, b@b.com, c@b.com, d@b.com, e@b.com, f@b.com" });
+  fail("validateRecipients: deveria rejeitar 6 em para sem cc/cco", "passou quando não devia");
+} catch (e) {
+  e.message.includes("máximo de 5")
+    ? ok("validateRecipients: rejeita 6 só em para (esperado)", e.message)
     : fail("validateRecipients: mensagem incorreta", e.message);
 }
 

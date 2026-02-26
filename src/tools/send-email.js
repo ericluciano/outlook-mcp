@@ -9,13 +9,19 @@ import { validateRecipients, checkRateLimit, registerAction } from "../guardrail
 export const sendEmailSchema = z.object({
   para: z
     .string()
-    .describe("E-mail do destinatário. Para múltiplos, separe por vírgula. Máximo 5 destinatários."),
+    .describe(
+      "E-mail do destinatário. Para múltiplos, separe por vírgula. O total de para + CC + CCO não pode ultrapassar 5."
+    ),
   assunto: z.string().describe("Assunto do e-mail"),
   corpo: z.string().describe("Corpo do e-mail em texto simples ou HTML"),
   cc: z
     .string()
     .optional()
     .describe("E-mails em cópia (CC). Separe por vírgula se mais de um."),
+  cco: z
+    .string()
+    .optional()
+    .describe("E-mails em cópia oculta (CCO / BCC). Separe por vírgula se mais de um."),
   html: z
     .boolean()
     .optional()
@@ -31,10 +37,10 @@ export const sendEmailSchema = z.object({
 });
 
 export async function sendEmail(params) {
-  const { para, assunto, corpo, cc, html, confirmacao } = params;
+  const { para, assunto, corpo, cc, cco, html, confirmacao } = params;
 
-  // 1. Valida número de destinatários
-  validateRecipients(para);
+  // 1. Valida total de destinatários (para + cc + cco ≤ 5)
+  validateRecipients({ para, cc, cco });
 
   // 2. Verifica rate limit
   await checkRateLimit("email", confirmacao);
@@ -49,6 +55,12 @@ export async function sendEmail(params) {
       }))
     : [];
 
+  const bccRecipients = cco
+    ? cco.split(",").map((email) => ({
+        emailAddress: { address: email.trim() },
+      }))
+    : [];
+
   const message = {
     subject: assunto,
     body: {
@@ -57,6 +69,7 @@ export async function sendEmail(params) {
     },
     toRecipients,
     ...(ccRecipients.length > 0 && { ccRecipients }),
+    ...(bccRecipients.length > 0 && { bccRecipients }),
   };
 
   await graphRequest("POST", "/me/sendMail", { message });

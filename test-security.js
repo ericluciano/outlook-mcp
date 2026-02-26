@@ -101,45 +101,63 @@ function restoreRateLimit(backup) {
 }
 
 // =============================================================================
-// VETOR 1 — Bypass de destinatários via formatação criativa
+// VETOR 1 — Bypass de destinatários via formatação criativa (para + cc + cco)
 // =============================================================================
 
-console.log("\n🔴 VETOR 1 — Bypass de destinatários (validateRecipients)\n" + "─".repeat(60));
+console.log("\n🔴 VETOR 1 — Bypass de destinatários (validateRecipients — total para+cc+cco)\n" + "─".repeat(60));
 
-// 1a. Exatamente 6 endereços normais
-blocked("6 destinatários separados por vírgula", () =>
-  validateRecipients("a@b.com,b@b.com,c@b.com,d@b.com,e@b.com,f@b.com")
+// 1a. 6 só em para
+blocked("6 destinatários só em para", () =>
+  validateRecipients({ para: "a@b.com,b@b.com,c@b.com,d@b.com,e@b.com,f@b.com" })
 );
 
-// 1b. Injeção de espaços extras para confundir o split
-blocked("6 destinatários com espaços extras entre vírgulas", () =>
-  validateRecipients("a@b.com ,  b@b.com , c@b.com , d@b.com , e@b.com , f@b.com")
+// 1b. 5 para + 1 cc = 6 total — deve bloquear
+blocked("5 para + 1 cc = 6 total", () =>
+  validateRecipients({ para: "a@b.com,b@b.com,c@b.com,d@b.com,e@b.com", cc: "f@b.com" })
 );
 
-// 1c. Tentativa de passar tudo como 1 string sem vírgulas (endereço inventado com `;`)
-// Ponto e vírgula NÃO é separador — resultado = 1 destinatário com `;` no endereço
-// Não é bypass de contagem, mas confirma que o código não normaliza ponto e vírgula
-allowed("Ponto e vírgula não é separador — conta como 1 destinatário", () =>
-  validateRecipients("a@b.com;b@b.com;c@b.com;d@b.com;e@b.com;f@b.com")
+// 1c. 4 para + 1 cc + 1 cco = 6 total — deve bloquear
+blocked("4 para + 1 cc + 1 cco = 6 total", () =>
+  validateRecipients({ para: "a@b.com,b@b.com,c@b.com,d@b.com", cc: "e@b.com", cco: "f@b.com" })
 );
 
-// 1d. String vazia após split (vírgulas duplicadas como ruído)
-blocked("6 reais com vírgulas duplicadas (ruído)", () =>
-  validateRecipients("a@b.com,,b@b.com,,c@b.com,,d@b.com,,e@b.com,,f@b.com")
-);
-// Nota: filter(Boolean) remove strings vazias, então 6 endereços reais ainda são 6
-
-// 1e. Limite exato — 5 deve passar
-allowed("5 destinatários — dentro do limite", () =>
-  validateRecipients("a@b.com,b@b.com,c@b.com,d@b.com,e@b.com")
+// 1d. 1 para + 2 cc + 20 cco = 23 total — deve bloquear
+blocked("1 para + 2 cc + 20 cco = 23 total (ataque via cco)", () =>
+  validateRecipients({
+    para: "a@b.com",
+    cc: "b@b.com,c@b.com",
+    cco: Array.from({ length: 20 }, (_, i) => `x${i}@b.com`).join(","),
+  })
 );
 
-// 1f. CC não entra na contagem de `para` — analisando comportamento esperado
-// CC é um campo separado, validateRecipients só valida `para`.
-// Isso é um gap documentado: para=5 + cc=10 = 15 destinatários totais.
-// Documentamos o comportamento atual (não bloqueamos cc).
-allowed("5 destinatários em para (CC não é validado — comportamento documentado)", () =>
-  validateRecipients("a@b.com,b@b.com,c@b.com,d@b.com,e@b.com")
+// 1e. Espaços extras entre vírgulas não enganam o split
+blocked("6 com espaços extras distribuídos entre para+cc", () =>
+  validateRecipients({ para: "a@b.com ,  b@b.com , c@b.com", cc: "d@b.com ,  e@b.com , f@b.com" })
+);
+
+// 1f. Vírgulas duplicadas (ruído) não reduzem a contagem real
+blocked("6 reais com vírgulas duplicadas distribuídas", () =>
+  validateRecipients({ para: "a@b.com,,b@b.com,,c@b.com", cc: "d@b.com,,e@b.com,,f@b.com" })
+);
+
+// 1g. Separador `;` não é reconhecido — conta como 1 string, não 6
+allowed("Ponto e vírgula em para — conta como 1 destinatário (não é separador)", () =>
+  validateRecipients({ para: "a@b.com;b@b.com;c@b.com;d@b.com;e@b.com;f@b.com" })
+);
+
+// 1h. Limite exato 5 (3+1+1) — deve passar
+allowed("3 para + 1 cc + 1 cco = 5 total — dentro do limite", () =>
+  validateRecipients({ para: "a@b.com,b@b.com,c@b.com", cc: "d@b.com", cco: "e@b.com" })
+);
+
+// 1i. Sem cc e cco (undefined) — não causa crash
+allowed("5 só em para, cc e cco ausentes (undefined)", () =>
+  validateRecipients({ para: "a@b.com,b@b.com,c@b.com,d@b.com,e@b.com", cc: undefined, cco: undefined })
+);
+
+// 1j. cc e cco vazios (string vazia) — não somam à contagem
+allowed("4 para + cc='' + cco='' = 4 total — strings vazias não contam", () =>
+  validateRecipients({ para: "a@b.com,b@b.com,c@b.com,d@b.com", cc: "", cco: "" })
 );
 
 // =============================================================================
@@ -338,7 +356,7 @@ console.log("\n🔴 VETOR 4 — Bypass via validação Zod dos schemas\n" + "─
     console.log(`  ⚠️  ATENÇÃO: Zod coagiu array para string: "${r.data.para}" — verificar se validateRecipients bloqueia`);
     // Verifica se validateRecipients bloquearia
     try {
-      validateRecipients(r.data.para);
+      validateRecipients({ para: r.data.para });
       console.log("  ❌ BYPASS TOTAL: array coagido para string e validateRecipients não bloqueou");
       failed++;
     } catch {
@@ -414,24 +432,30 @@ try {
 }
 
 // =============================================================================
-// VETOR 6 — Bypass via CC (vetor de volume não coberto pelo guardrail atual)
+// VETOR 6 — Confirmação de cobertura total: para + CC + CCO
 // =============================================================================
 
-console.log("\n🔴 VETOR 6 — Análise de gap: campo CC não tem limite de destinatários\n" + "─".repeat(60));
+console.log("\n🔴 VETOR 6 — Cobertura total para + CC + CCO\n" + "─".repeat(60));
 
-// CC com 20 endereços — validateRecipients não é chamado para cc
-// Este é um gap DOCUMENTADO. Testamos para confirmar o comportamento.
-try {
-  const ccMuitos = Array.from({ length: 20 }, (_, i) => `pessoa${i}@empresa.com`).join(",");
-  validateRecipients(ccMuitos); // Errado — não deveria chamar isso para CC
-  console.log("  ⚠️  GAP DOCUMENTADO: CC com 20 endereços passa por validateRecipients se chamado");
-  console.log("     → Mas validateRecipients NÃO é chamado para o campo cc no código atual.");
-  console.log("     → send-email.js só chama validateRecipients(para). CC não tem limite.");
-  console.log("     → Impacto real: baixo (CC não dispara spam em massa sozinho).");
-} catch {
-  console.log("  ✅ CC com 20 endereços seria bloqueado se validado — confirmado");
-}
-passed++; // documentamos, não é um falso positivo
+// 6a. CC com 20 endereços agora é bloqueado (gap corrigido)
+blocked("CC com 20 endereços bloqueado (limite total)", () =>
+  validateRecipients({ para: "a@b.com", cc: Array.from({ length: 20 }, (_, i) => `cc${i}@b.com`).join(",") })
+);
+
+// 6b. CCO com 20 endereços agora é bloqueado
+blocked("CCO com 20 endereços bloqueado (limite total)", () =>
+  validateRecipients({ para: "a@b.com", cco: Array.from({ length: 20 }, (_, i) => `bcc${i}@b.com`).join(",") })
+);
+
+// 6c. Distribuição que soma exatamente 5 (2+2+1) — deve passar
+allowed("2 para + 2 cc + 1 cco = 5 total — no limite exato", () =>
+  validateRecipients({ para: "a@b.com,b@b.com", cc: "c@b.com,d@b.com", cco: "e@b.com" })
+);
+
+// 6d. Distribuição que soma 6 (2+2+2) — deve bloquear
+blocked("2 para + 2 cc + 2 cco = 6 total — um acima do limite", () =>
+  validateRecipients({ para: "a@b.com,b@b.com", cc: "c@b.com,d@b.com", cco: "e@b.com,f@b.com" })
+);
 
 // =============================================================================
 // RESULTADO FINAL
