@@ -6,11 +6,12 @@
  */
 
 import { z } from "zod";
-import { graphRequest } from "../graph.js";
+import { graphRequest, graphRequestPaginated } from "../graph.js";
 
 export const updateEventSchema = z.object({
   titulo_busca: z
     .string()
+    .min(1, "Título de busca não pode ser vazio")
     .describe("Título (ou parte do título) do compromisso a ser atualizado. Usado para localizar o evento."),
   data_busca: z
     .string()
@@ -59,9 +60,9 @@ export async function updateEvent(params) {
   const startISO = new Date(`${dataBusca}T00:00:00${offset}`).toISOString();
   const endISO = new Date(`${dataBusca}T23:59:59${offset}`).toISOString();
 
-  // Buscar eventos do dia para localizar pelo título
-  const endpoint = `/me/calendarView?startDateTime=${startISO}&endDateTime=${endISO}&$top=50&$orderby=start/dateTime&$select=id,subject,start,end,body,location,showAs`;
-  const result = await graphRequest("GET", endpoint);
+  // Buscar eventos do dia para localizar pelo título (paginado, até 500)
+  const endpoint = `/me/calendarView?startDateTime=${startISO}&endDateTime=${endISO}&$top=500&$orderby=start/dateTime&$select=id,subject,start,end,body,location,showAs`;
+  const result = await graphRequestPaginated(endpoint, 500);
 
   if (!result?.value?.length) {
     return `Nenhum compromisso encontrado para a data ${dataBusca}.`;
@@ -110,6 +111,11 @@ export async function updateEvent(params) {
 
   if (fim) {
     patch.end = { dateTime: fim, timeZone: fuso_horario };
+  }
+
+  // Validar ordem inicio/fim se ambos foram informados
+  if (inicio && fim && new Date(fim) <= new Date(inicio)) {
+    throw new Error(`Horário de término (${fim}) deve ser após o início (${inicio}).`);
   }
 
   if (mostrar_como) {

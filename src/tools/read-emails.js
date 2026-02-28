@@ -3,7 +3,7 @@
  */
 
 import { z } from "zod";
-import { graphRequest } from "../graph.js";
+import { graphRequestPaginated } from "../graph.js";
 
 export const readEmailsSchema = z.object({
   pasta: z
@@ -14,8 +14,8 @@ export const readEmailsSchema = z.object({
   quantidade: z
     .number()
     .optional()
-    .default(10)
-    .describe("Número de e-mails a retornar. Padrão: 10. Máximo: 50"),
+    .default(20)
+    .describe("Número de e-mails a retornar. Padrão: 20. Máximo: 200"),
   apenas_nao_lidos: z
     .boolean()
     .optional()
@@ -25,32 +25,63 @@ export const readEmailsSchema = z.object({
     .string()
     .optional()
     .describe("Texto para filtrar e-mails por assunto ou remetente"),
+  data_inicio: z
+    .string()
+    .optional()
+    .describe("Data inicial para filtrar e-mails (formato YYYY-MM-DD). Ex: 2026-01-01"),
+  data_fim: z
+    .string()
+    .optional()
+    .describe("Data final para filtrar e-mails (formato YYYY-MM-DD). Ex: 2026-02-28"),
 });
 
 export async function readEmails(params) {
-  const { pasta, quantidade, apenas_nao_lidos, busca } = params;
+  const { pasta, quantidade, apenas_nao_lidos, busca, data_inicio, data_fim } = params;
 
-  const top = Math.min(quantidade, 50);
+  const top = Math.min(quantidade, 200);
 
-  // $search e $filter não podem ser combinados; $search também é incompatível com $orderby.
-  // Estratégia: se há busca, usar $search (sem $orderby e sem $filter).
-  // Se há apenas filtro de não-lidos, usar $filter com $orderby.
+  // Montar filtros
   let searchQuery = "";
-  let filterQuery = "";
+  let filterParts = [];
   let orderbyQuery = "&$orderby=receivedDateTime desc";
 
-  if (busca) {
-    searchQuery = `&$search=${encodeURIComponent(`"${busca}"`)}`;
-    orderbyQuery = ""; // $search é incompatível com $orderby
-  } else if (apenas_nao_lidos) {
-    // $filter com $orderby requer índice — usar $filter sem $orderby para não-lidos
-    filterQuery = `&$filter=${encodeURIComponent("isRead eq false")}`;
-    orderbyQuery = ""; // evita InefficientFilter
+  // Filtro de data — incompatível com $search, avisar se combinados
+  if (busca && (data_inicio || data_fim)) {
+    throw new Error(
+      "Não é possível combinar 'busca' com 'data_inicio'/'data_fim'. " +
+      "Use busca de texto OU filtro de data, não os dois ao mesmo tempo."
+    );
   }
+
+  if (data_inicio || data_fim) {
+    const inicio = data_inicio
+      ? new Date(`${data_inicio}T00:00:00-03:00`).toISOString()
+      : new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
+    const fim = data_fim
+      ? new Date(`${data_fim}T23:59:59-03:00`).toISOString()
+      : new Date().toISOString();
+    filterParts.push(`receivedDateTime ge datetime('${inicio}') and receivedDateTime le datetime('${fim}')`);
+  }
+
+  if (busca) {
+    // $search não é compatível com $filter ou $orderby
+    searchQuery = `&$search=${encodeURIComponent(`"${busca}"`)}`;
+    orderbyQuery = "";
+    filterParts = [];
+  } else {
+    if (apenas_nao_lidos) {
+      filterParts.push("isRead eq false");
+      orderbyQuery = ""; // evita InefficientFilter
+    }
+  }
+
+  const filterQuery = filterParts.length > 0
+    ? `&$filter=${encodeURIComponent(filterParts.join(" and "))}`
+    : "";
 
   const endpoint = `/me/mailFolders/${pasta}/messages?$top=${top}${orderbyQuery}&$select=id,subject,from,receivedDateTime,isRead,bodyPreview${filterQuery}${searchQuery}`;
 
-  const result = await graphRequest("GET", endpoint);
+  const result = await graphRequestPaginated(endpoint, top);
 
   if (!result || !result.value || result.value.length === 0) {
     return "Nenhum e-mail encontrado.";

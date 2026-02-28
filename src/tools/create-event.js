@@ -54,6 +54,13 @@ export async function createEvent(params) {
   // 1. Garante que não há campos de recorrência no payload
   validateNotRecurring(params);
 
+  // Validar que fim > inicio (apenas para eventos com hora)
+  if (!dia_inteiro && inicio && fim) {
+    if (new Date(fim) <= new Date(inicio)) {
+      throw new Error(`Horário de término (${fim}) deve ser após o início (${inicio}).`);
+    }
+  }
+
   // 2. Verifica rate limit
   await checkRateLimit("event", confirmacao);
 
@@ -64,17 +71,19 @@ export async function createEvent(params) {
       }))
     : [];
 
+  // Eventos de dia inteiro usam start.date/end.date (sem hora), não dateTime
+  const startField = dia_inteiro
+    ? { date: inicio.split("T")[0] }
+    : { dateTime: inicio, timeZone: fuso_horario };
+  const endField = dia_inteiro
+    ? { date: fim.split("T")[0] }
+    : { dateTime: fim, timeZone: fuso_horario };
+
   const event = {
     subject: titulo,
     isAllDay: dia_inteiro,
-    start: {
-      dateTime: inicio,
-      timeZone: fuso_horario,
-    },
-    end: {
-      dateTime: fim,
-      timeZone: fuso_horario,
-    },
+    start: startField,
+    end: endField,
     ...(descricao && {
       body: {
         contentType: "Text",
@@ -100,9 +109,17 @@ export async function createEvent(params) {
       ? ` | Convidados: ${attendees.map((a) => a.emailAddress.address).join(", ")}`
       : "";
 
-  // result.start.dateTime retornado pela API não tem sufixo de timezone — exibir diretamente
-  const iniExib = result.start.dateTime.replace("T", " ").substring(0, 16);
-  const fimExib = result.end.dateTime.replace("T", " ").substring(0, 16);
+  // Eventos de dia inteiro retornam start.date; eventos normais retornam start.dateTime
+  const iniExib = dia_inteiro
+    ? (result.start.date || inicio.split("T")[0])
+    : (result.start.dateTime || inicio).replace("T", " ").substring(0, 16);
+  const fimExib = dia_inteiro
+    ? (result.end.date || fim.split("T")[0])
+    : (result.end.dateTime || fim).replace("T", " ").substring(0, 16);
 
-  return `Compromisso criado com sucesso!\n- Título: ${result.subject}\n- Início: ${iniExib} (${fuso_horario})\n- Fim: ${fimExib}${convidadosStr}\n- Link: ${link}`;
+  const periodoStr = dia_inteiro
+    ? `${iniExib} (dia inteiro)`
+    : `${iniExib} até ${fimExib} (${fuso_horario})`;
+
+  return `Compromisso criado com sucesso!\n- Título: ${result.subject}\n- Período: ${periodoStr}${convidadosStr}\n- Link: ${link}`;
 }

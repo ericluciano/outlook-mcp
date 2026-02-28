@@ -23,7 +23,7 @@ export const checkAvailabilitySchema = z.object({
   data_fim: z
     .string()
     .describe(
-      "Data e hora de fim da janela de consulta no formato ISO 8601. Ex: 2026-03-10T18:00:00"
+      "Data e hora de fim da janela de consulta no formato ISO 8601. Ex: 2026-03-10T18:00:00 (máximo 62 dias a partir de data_inicio)"
     ),
   intervalo_minutos: z
     .number()
@@ -43,6 +43,18 @@ export async function checkAvailability(params) {
   const { pessoas, data_inicio, data_fim, intervalo_minutos, fuso_horario } = params;
 
   const emails = pessoas.split(",").map((e) => e.trim()).filter(Boolean);
+
+  if (emails.length === 0) {
+    throw new Error("Informe pelo menos um e-mail no campo 'pessoas'.");
+  }
+
+  // Validar período máximo de 62 dias (limite da Graph API)
+  const diasDiferenca = (new Date(data_fim) - new Date(data_inicio)) / (1000 * 60 * 60 * 24);
+  if (diasDiferenca > 62) {
+    throw new Error(
+      `Período máximo é 62 dias. Informado: ${Math.ceil(diasDiferenca)} dias. Reduza o intervalo ou separe em múltiplas chamadas.`
+    );
+  }
 
   const body = {
     schedules: emails,

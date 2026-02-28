@@ -19,6 +19,11 @@ const server = new McpServer({
   version: "1.0.0",
 });
 
+function errMsg(err, contexto) {
+  const hint = err.hint ? `\n💡 ${err.hint}` : "";
+  return `Erro ao ${contexto}: ${err.message}${hint}`;
+}
+
 // ─── Ferramenta: Enviar E-mail ───────────────────────────────────────────────
 
 server.tool(
@@ -30,10 +35,7 @@ server.tool(
       const result = await sendEmail(params);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
-      return {
-        content: [{ type: "text", text: `Erro ao enviar e-mail: ${err.message}` }],
-        isError: true,
-      };
+      return { content: [{ type: "text", text: errMsg(err, "enviar e-mail") }], isError: true };
     }
   }
 );
@@ -49,10 +51,7 @@ server.tool(
       const result = await createEvent(params);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
-      return {
-        content: [{ type: "text", text: `Erro ao criar compromisso: ${err.message}` }],
-        isError: true,
-      };
+      return { content: [{ type: "text", text: errMsg(err, "criar compromisso") }], isError: true };
     }
   }
 );
@@ -68,10 +67,7 @@ server.tool(
       const result = await readEmails(params);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
-      return {
-        content: [{ type: "text", text: `Erro ao ler e-mails: ${err.message}` }],
-        isError: true,
-      };
+      return { content: [{ type: "text", text: errMsg(err, "ler e-mails") }], isError: true };
     }
   }
 );
@@ -87,10 +83,7 @@ server.tool(
       const result = await listEvents(params);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
-      return {
-        content: [{ type: "text", text: `Erro ao listar compromissos: ${err.message}` }],
-        isError: true,
-      };
+      return { content: [{ type: "text", text: errMsg(err, "listar compromissos") }], isError: true };
     }
   }
 );
@@ -106,10 +99,7 @@ server.tool(
       const result = await searchContacts(params);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
-      return {
-        content: [{ type: "text", text: `Erro ao buscar contato: ${err.message}` }],
-        isError: true,
-      };
+      return { content: [{ type: "text", text: errMsg(err, "buscar contato") }], isError: true };
     }
   }
 );
@@ -125,10 +115,7 @@ server.tool(
       const result = await checkAvailability(params);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
-      return {
-        content: [{ type: "text", text: `Erro ao verificar disponibilidade: ${err.message}` }],
-        isError: true,
-      };
+      return { content: [{ type: "text", text: errMsg(err, "verificar disponibilidade") }], isError: true };
     }
   }
 );
@@ -144,10 +131,7 @@ server.tool(
       const result = await markEmail(params);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
-      return {
-        content: [{ type: "text", text: `Erro ao marcar e-mail: ${err.message}` }],
-        isError: true,
-      };
+      return { content: [{ type: "text", text: errMsg(err, "marcar e-mail") }], isError: true };
     }
   }
 );
@@ -163,10 +147,7 @@ server.tool(
       const result = await updateEvent(params);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
-      return {
-        content: [{ type: "text", text: `Erro ao atualizar compromisso: ${err.message}` }],
-        isError: true,
-      };
+      return { content: [{ type: "text", text: errMsg(err, "atualizar compromisso") }], isError: true };
     }
   }
 );

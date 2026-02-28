@@ -53,6 +53,61 @@ async function getAccessToken() {
   return response.accessToken;
 }
 
+/**
+ * graphRequestPaginated — Faz GET com paginação automática via @odata.nextLink.
+ * Segue páginas até atingir o teto máximo (maxItems) ou não haver mais resultados.
+ */
+export async function graphRequestPaginated(endpoint, maxItems = 1000) {
+  let allItems = [];
+  let nextEndpoint = endpoint;
+
+  while (nextEndpoint && allItems.length < maxItems) {
+    // Se nextEndpoint é URL completa (nextLink), usar direto; senão prefixar com GRAPH_BASE
+    const isFullUrl = nextEndpoint.startsWith("https://");
+    const token = await getAccessToken();
+    const url = isFullUrl ? nextEndpoint : `${GRAPH_BASE}${nextEndpoint}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      const err = new Error(`Graph API error ${response.status}: ${error}`);
+      err.statusCode = response.status;
+      if (response.status === 401) err.hint = "Token expirado. Execute: node auth.js";
+      if (response.status === 403) err.hint = "Sem permissão para esta ação.";
+      if (response.status === 429) err.hint = "Rate limit atingido. Aguarde e tente novamente.";
+      throw err;
+    }
+
+    const text = await response.text();
+    if (!text) break;
+
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch (e) {
+      throw new Error(`Graph API retornou resposta inválida: ${text.substring(0, 200)}`);
+    }
+
+    if (result.value) {
+      allItems = allItems.concat(result.value);
+    }
+
+    // Seguir próxima página se existir e não ultrapassou teto
+    nextEndpoint = (result["@odata.nextLink"] && allItems.length < maxItems)
+      ? result["@odata.nextLink"]
+      : null;
+  }
+
+  return { value: allItems.slice(0, maxItems) };
+}
+
 export async function graphRequest(method, endpoint, body = null) {
   const token = await getAccessToken();
 
@@ -72,7 +127,13 @@ export async function graphRequest(method, endpoint, body = null) {
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Graph API error ${response.status}: ${error}`);
+    const err = new Error(`Graph API error ${response.status}: ${error}`);
+    err.statusCode = response.status;
+    // Mensagens amigáveis para erros comuns
+    if (response.status === 401) err.hint = "Token expirado. Execute: node auth.js";
+    if (response.status === 403) err.hint = "Sem permissão para esta ação. Verifique os escopos do app Azure.";
+    if (response.status === 429) err.hint = "Rate limit atingido. Aguarde alguns segundos e tente novamente.";
+    throw err;
   }
 
   if (response.status === 204 || response.status === 202) return null;

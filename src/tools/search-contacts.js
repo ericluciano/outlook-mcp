@@ -3,7 +3,7 @@
  */
 
 import { z } from "zod";
-import { graphRequest } from "../graph.js";
+import { graphRequestPaginated } from "../graph.js";
 
 export const searchContactsSchema = z.object({
   nome: z
@@ -19,13 +19,13 @@ export const searchContactsSchema = z.object({
 export async function searchContacts(params) {
   const { nome, quantidade } = params;
 
-  const top = Math.min(quantidade, 25);
+  const top = Math.min(quantidade, 100);
   const search = encodeURIComponent(`"${nome}"`);
 
   // Busca no diretório organizacional (People API)
   const endpoint = `/me/people?$search=${search}&$top=${top}&$select=displayName,scoredEmailAddresses,jobTitle,department,phones`;
 
-  const result = await graphRequest("GET", endpoint);
+  const result = await graphRequestPaginated(endpoint, top);
 
   if (!result || !result.value || result.value.length === 0) {
     return `Nenhum contato encontrado para "${nome}".`;
