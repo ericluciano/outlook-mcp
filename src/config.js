@@ -1,6 +1,9 @@
 /**
  * config.js — Configurações compartilhadas do Azure / Microsoft Graph
  * Importado por auth.js e src/graph.js para evitar duplicação.
+ *
+ * Variáveis de ambiente (opcional): OUTLOOK_CLIENT_ID, OUTLOOK_TENANT_ID
+ * Se não definidas, usa os valores padrão do app Azure cadastrado.
  */
 
 import fs from "fs";
@@ -9,8 +12,8 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export const CLIENT_ID = "b044cdc1-5c75-4c25-be87-46e51f036ae6";
-export const TENANT_ID = "ac4a752a-850f-4705-9525-7270b98b20b4";
+export const CLIENT_ID = process.env.OUTLOOK_CLIENT_ID ?? "b044cdc1-5c75-4c25-be87-46e51f036ae6";
+export const TENANT_ID = process.env.OUTLOOK_TENANT_ID ?? "ac4a752a-850f-4705-9525-7270b98b20b4";
 export const AUTHORITY = `https://login.microsoftonline.com/${TENANT_ID}`;
 export const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 

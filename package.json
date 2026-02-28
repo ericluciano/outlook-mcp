@@ -6,7 +6,11 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "auth": "node auth.js"
+    "auth": "node auth.js",
+    "test": "node test.js && node test-security.js"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "keywords": ["outlook", "microsoft365", "mcp", "claude", "model-context-protocol"],
   "author": "Eric Luciano",
