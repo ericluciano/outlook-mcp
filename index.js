@@ -158,7 +158,7 @@ server.tool(
 
 server.tool(
   "deletar_compromisso",
-  "Deleta um compromisso do Calendário do Outlook. Busca pelo título e data, mostra preview e exige confirmacao: true para confirmar a exclusão.",
+  "Deleta/cancela um compromisso do Calendário do Outlook. USE ESTA FERRAMENTA quando o usuário pedir para cancelar, deletar, remover ou excluir um compromisso. NÃO use atualizar_compromisso para cancelar — use esta. Busca pelo título e data, mostra preview e exige confirmacao: true para confirmar a exclusão definitiva.",
   deleteEventSchema.shape,
   async (params) => {
     try {
